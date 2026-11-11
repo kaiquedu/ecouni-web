@@ -89,9 +89,10 @@ export const ranking = (list) => {
   const map = {}
   list.forEach((c) => {
     const n = c.NomeColaborador || '—'
-    map[n] = map[n] || { nome: n, litros: 0, coletas: 0 }
+    map[n] = map[n] || { nome: n, litros: 0, coletas: 0, totals: { reciclavel: 0, papel: 0, naoReciclavel: 0 } }
     map[n].litros += litros(c)
     map[n].coletas += 1
+    map[n].totals[wasteFromValue(c.TipoResiduo).key] += litros(c)
   })
   return Object.values(map).sort((a, b) => b.litros - a.litros)
 }

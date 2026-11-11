@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { KeyRound, Search, Trash2, UserPlus, Users } from 'lucide-react'
-import { Avatar, Button, Dialog, EmptyState, ErrorState, Field, InfoBox, Skeleton } from '../components/ui'
+import { Avatar, Button, Dialog, EmptyState, ErrorState, Field, IconButton, Skeleton } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useColetas } from '../context/ColetasContext'
 import { useConfirm, useToast } from '../context/UiContext'
@@ -17,17 +17,24 @@ export default function Usuarios() {
   const [q, setQ] = useState('')
   const [creating, setCreating] = useState(false)
 
-  const load = async () => {
-    setError(null)
-    setUsers(null)
+  const load = useCallback(async () => {
     try {
       setUsers(await api.listUsuarios())
+      setError(null)
     } catch (e) {
       setError(e.message)
     }
-  }
+  }, [])
+
   useEffect(() => {
-    load()
+    let alive = true
+    api
+      .listUsuarios()
+      .then((u) => alive && setUsers(u))
+      .catch((e) => alive && setError(e.message))
+    return () => {
+      alive = false
+    }
   }, [])
 
   const del = async (u) => {
@@ -48,47 +55,50 @@ export default function Usuarios() {
     }
   }
 
-  const s = q.trim().toLowerCase()
-  const list = (users || []).filter((u) => !s || u.Nome.toLowerCase().includes(s) || u.Email.toLowerCase().includes(s))
+  const list = useMemo(() => {
+    const s = q.trim().toLowerCase()
+    return (users || []).filter((u) => !s || u.Nome.toLowerCase().includes(s) || u.Email.toLowerCase().includes(s))
+  }, [users, q])
+  const ativos = (users || []).filter((u) => u.Coletas > 0).length
 
   return (
     <>
-      <div className="page-head">
+      <header className="ph">
         <div>
-          <h1 className="h1">Usuários</h1>
-          <p className="muted">Quem tem acesso ao app EcoUni.</p>
+          <h1>Usuários</h1>
+          <p>{users ? `${users.length} ${users.length === 1 ? 'conta' : 'contas'}, ${ativos} com coletas registradas` : 'Quem tem acesso ao app EcoUni'}</p>
         </div>
         <Button icon={UserPlus} onClick={() => setCreating(true)}>
           Cadastrar usuário
         </Button>
-      </div>
+      </header>
 
-      <section className="card">
+      <div className="card">
         <div className="toolbar">
-          <Field icon={Search} placeholder="Buscar por nome ou e-mail" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar usuários" className="grow" />
+          <Field small icon={Search} placeholder="Buscar por nome ou e-mail" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Buscar usuários" />
         </div>
         {error ? (
           <ErrorState message={error} onRetry={load} />
         ) : !users ? (
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 12, padding: 20 }}>
             {[0, 1, 2, 3].map((i) => (
-              <Skeleton key={i} h={48} />
+              <Skeleton key={i} h={36} />
             ))}
           </div>
         ) : list.length === 0 ? (
           <EmptyState icon={Users} title={users.length ? 'Ninguém encontrado' : 'Nenhum usuário'} message={users.length ? 'Tente outro nome ou e-mail.' : 'Cadastre o primeiro colaborador para ele usar o app.'} />
         ) : (
-          <div className="table-wrap">
-            <table className="table">
+          <div className="tw">
+            <table>
               <thead>
                 <tr>
                   <th>Nome</th>
                   <th>Telefone</th>
                   <th>Perfil</th>
-                  <th style={{ textAlign: 'right' }}>Coletas</th>
-                  <th style={{ textAlign: 'right' }}>Volume</th>
+                  <th className="r">Coletas</th>
+                  <th className="r">Volume</th>
                   <th>Última coleta</th>
-                  <th>
+                  <th style={{ width: 56 }}>
                     <span className="sr-only">Ações</span>
                   </th>
                 </tr>
@@ -97,33 +107,29 @@ export default function Usuarios() {
                 {list.map((u) => (
                   <tr key={u.Cadastrarid}>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Avatar name={u.Nome} size={34} dark={u.IsAdmin} />
+                      <div className="who">
+                        <Avatar name={u.Nome} dark={u.IsAdmin} />
                         <div style={{ minWidth: 0 }}>
-                          <b style={{ display: 'block' }}>{u.Nome}</b>
-                          <span className="muted" style={{ fontSize: 13 }}>
-                            {u.Email}
-                          </span>
+                          <b>{u.Nome}</b>
+                          <span>{u.Email}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="muted" style={{ whiteSpace: 'nowrap' }}>
+                    <td className="num muted" style={{ whiteSpace: 'nowrap' }}>
                       {maskPhone(u.Telefone)}
                     </td>
                     <td>
-                      <span className="role" style={u.IsAdmin ? undefined : { background: 'var(--mist)', color: 'var(--text-2)' }}>
-                        {u.IsAdmin ? 'Administrador' : 'Colaborador'}
-                      </span>
+                      <span className={`pill${u.IsAdmin ? ' brand' : ''}`}>{u.IsAdmin ? 'Administrador' : 'Colaborador'}</span>
                     </td>
-                    <td className="num">{u.Coletas}</td>
-                    <td className="num">{formatLitros(u.Litros)}</td>
+                    <td className="num r">{u.Coletas}</td>
+                    <td className="num r" style={{ fontWeight: 600 }}>
+                      {formatLitros(u.Litros)}
+                    </td>
                     <td className="muted" style={{ whiteSpace: 'nowrap' }}>
                       {u.UltimaColeta ? formatRelative(u.UltimaColeta) : 'Nunca'}
                     </td>
                     <td>
-                      <div className="row-actions">
-                        {u.IsAdmin || u.Cadastrarid === user?.Cadastrarid ? null : <Button variant="ghost" size="sm" icon={Trash2} onClick={() => del(u)} aria-label={`Excluir ${u.Nome}`} />}
-                      </div>
+                      <div className="row-acts">{u.IsAdmin || u.Cadastrarid === user?.Cadastrarid ? null : <IconButton icon={Trash2} danger label={`Excluir ${u.Nome}`} onClick={() => del(u)} />}</div>
                     </td>
                   </tr>
                 ))}
@@ -131,34 +137,26 @@ export default function Usuarios() {
             </table>
           </div>
         )}
-      </section>
+      </div>
 
-      <NovoUsuario
-        open={creating}
-        onClose={() => setCreating(false)}
-        onCreated={(nome) => {
-          setCreating(false)
-          toast(`${nome} foi cadastrado.`)
-          load()
-        }}
-      />
+      {creating ? (
+        <NovoUsuario
+          onClose={() => setCreating(false)}
+          onCreated={(nome) => {
+            setCreating(false)
+            toast(`${nome} foi cadastrado.`)
+            load()
+          }}
+        />
+      ) : null}
     </>
   )
 }
 
-const EMPTY = { Nome: '', Email: '', Telefone: '', Senha: '' }
-
-function NovoUsuario({ open, onClose, onCreated }) {
-  const [form, setForm] = useState(EMPTY)
+function NovoUsuario({ onClose, onCreated }) {
+  const [form, setForm] = useState({ Nome: '', Email: '', Telefone: '', Senha: '' })
   const [errors, setErrors] = useState({})
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    if (open) {
-      setForm(EMPTY)
-      setErrors({})
-    }
-  }, [open])
 
   const validate = (f = form) => {
     const e = {}
@@ -187,26 +185,30 @@ function NovoUsuario({ open, onClose, onCreated }) {
     } catch (err) {
       if (err.status === 409) setErrors((x) => ({ ...x, Email: 'Já existe uma conta com este e-mail.' }))
       else setErrors((x) => ({ ...x, form: err.message }))
-    } finally {
       setSaving(false)
     }
   }
 
   return (
-    <Dialog open={open} onClose={onClose} title="Novo usuário">
-      <form onSubmit={submit} noValidate className="form-stack">
-        <Field label="Nome completo" placeholder="Nome e sobrenome" value={form.Nome} onChange={set('Nome')} onBlur={() => blur('Nome')} error={errors.Nome} autoComplete="off" />
-        <Field label="E-mail institucional" type="email" inputMode="email" placeholder="nome@ecouni.dev" value={form.Email} onChange={set('Email')} onBlur={() => blur('Email')} error={errors.Email} autoComplete="off" />
-        <Field label="Telefone" type="tel" inputMode="tel" placeholder="(11) 90000-0000" value={form.Telefone} onChange={set('Telefone')} onBlur={() => blur('Telefone')} error={errors.Telefone} />
-        <Field label="Senha inicial" type="password" placeholder="Mínimo de 8 caracteres" value={form.Senha} onChange={set('Senha')} onBlur={() => blur('Senha')} error={errors.Senha} autoComplete="new-password" />
-        <InfoBox icon={KeyRound}>A pessoa entra no app como colaborador com essa senha e pode trocá-la depois em Conta.</InfoBox>
-        {errors.form ? (
-          <p className="field-error" role="alert">
-            {errors.form}
-          </p>
-        ) : null}
-        <div className="dialog-actions" style={{ marginTop: 4 }}>
-          <Button variant="outline" onClick={onClose}>
+    <Dialog open onClose={onClose} title="Novo usuário" lead="A pessoa entra no app como colaborador.">
+      <form onSubmit={submit} noValidate>
+        <div className="stack">
+          <Field label="Nome completo" placeholder="Nome e sobrenome" value={form.Nome} onChange={set('Nome')} onBlur={() => blur('Nome')} error={errors.Nome} autoComplete="off" />
+          <Field label="E-mail institucional" type="email" inputMode="email" placeholder="nome@ecouni.dev" value={form.Email} onChange={set('Email')} onBlur={() => blur('Email')} error={errors.Email} autoComplete="off" />
+          <Field label="Telefone" type="tel" inputMode="tel" placeholder="(11) 90000-0000" value={form.Telefone} onChange={set('Telefone')} onBlur={() => blur('Telefone')} error={errors.Telefone} />
+          <Field label="Senha inicial" type="password" placeholder="Mínimo de 8 caracteres" value={form.Senha} onChange={set('Senha')} onBlur={() => blur('Senha')} error={errors.Senha} autoComplete="new-password" />
+          <div className="note">
+            <KeyRound size={17} aria-hidden />
+            <span>A pessoa pode trocar essa senha depois, em Conta, no app.</span>
+          </div>
+          {errors.form ? (
+            <p className="err" role="alert">
+              {errors.form}
+            </p>
+          ) : null}
+        </div>
+        <div className="df">
+          <Button variant="s" onClick={onClose}>
             Cancelar
           </Button>
           <Button type="submit" loading={saving}>

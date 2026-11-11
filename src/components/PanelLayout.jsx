@@ -1,73 +1,53 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { BarChart3, ClipboardList, LayoutDashboard, LogOut, Menu, Users, X } from 'lucide-react'
-import { Avatar, Brand } from './ui'
+import { BarChart3, ClipboardList, LayoutGrid, LogOut, Users } from 'lucide-react'
+import { Avatar, IconButton, Logo } from './ui'
 import { useAuth } from '../context/AuthContext'
 import { useConfirm } from '../context/UiContext'
 import { ColetasProvider } from '../context/ColetasContext'
-import './panel.css'
+import './layout.css'
 
 const NAV = [
-  { to: '/painel', end: true, label: 'Visão geral', icon: LayoutDashboard },
-  { to: '/painel/coletas', label: 'Coletas', icon: ClipboardList },
-  { to: '/painel/relatorios', label: 'Relatórios', icon: BarChart3 },
-  { to: '/painel/usuarios', label: 'Usuários', icon: Users },
+  { to: '/', end: true, label: 'Visão geral', icon: LayoutGrid },
+  { to: '/coletas', label: 'Coletas', icon: ClipboardList },
+  { to: '/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { to: '/usuarios', label: 'Usuários', icon: Users },
 ]
 
 export default function PanelLayout() {
   const { user, logout } = useAuth()
   const confirm = useConfirm()
-  const [open, setOpen] = useState(false)
-  const location = useLocation()
+  const { pathname } = useLocation()
 
-  useEffect(() => {
-    setOpen(false)
-    window.scrollTo(0, 0)
-  }, [location.pathname])
+  useEffect(() => window.scrollTo(0, 0), [pathname])
 
   const sair = async () => {
-    if (await confirm({ title: 'Sair do painel?', message: 'Você vai precisar entrar de novo com e-mail e senha.', confirmLabel: 'Sair', destructive: true })) logout()
+    if (await confirm({ title: 'Sair do painel?', message: 'Você vai precisar entrar de novo com e-mail e senha.', confirmLabel: 'Sair' })) logout()
   }
 
   return (
     <ColetasProvider>
-      <div className="panel">
-        <header className="panel-top">
-          <button type="button" className="btn btn-ghost btn-icon" onClick={() => setOpen(true)} aria-label="Abrir menu">
-            <Menu size={22} />
-          </button>
-          <Brand size={30} word={16} />
-        </header>
-
-        <aside className={`side${open ? ' open' : ''}`} aria-label="Menu do painel">
-          <div className="side-head">
-            <Brand size={34} word={17} />
-            <button type="button" className="btn btn-ghost btn-icon side-close" onClick={() => setOpen(false)} aria-label="Fechar menu">
-              <X size={22} />
-            </button>
-          </div>
-          <nav className="side-nav">
+      <div className="shell">
+        <aside className="side">
+          <Logo />
+          <nav className="nav" aria-label="Painel">
             {NAV.map(({ to, end, label, icon: Icon }) => (
-              <NavLink key={to} to={to} end={end} className={({ isActive }) => `side-link${isActive ? ' active' : ''}`}>
-                <Icon size={20} aria-hidden />
-                {label}
+              <NavLink key={to} to={to} end={end} className={({ isActive }) => (isActive ? 'active' : undefined)} aria-label={label}>
+                <Icon size={18} aria-hidden />
+                <span className="nl">{label}</span>
               </NavLink>
             ))}
           </nav>
-          <div className="side-user">
-            <Avatar name={user?.Nome} size={40} dark />
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <b className="side-name">{user?.Nome}</b>
-              <span className="role">Administrador</span>
+          <div className="me">
+            <Avatar name={user?.Nome} dark />
+            <div>
+              <b>{user?.Nome}</b>
+              <span>Administrador</span>
             </div>
-            <button type="button" className="btn btn-ghost btn-icon" onClick={sair} aria-label="Sair do painel">
-              <LogOut size={20} />
-            </button>
+            <IconButton icon={LogOut} label="Sair" onClick={sair} />
           </div>
         </aside>
-        {open ? <div className="side-scrim" onClick={() => setOpen(false)} aria-hidden /> : null}
-
-        <main className="panel-main" key={location.pathname}>
+        <main className="main" key={pathname}>
           <Outlet />
         </main>
       </div>

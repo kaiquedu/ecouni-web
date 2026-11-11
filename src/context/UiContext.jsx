@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { AlertCircle, AlertTriangle, CheckCircle2, HelpCircle } from 'lucide-react'
+import { AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button, Dialog } from '../components/ui'
 
 const ToastContext = createContext(() => {})
@@ -7,7 +7,7 @@ const ConfirmContext = createContext(null)
 
 export function UiProvider({ children }) {
   const [toast, setToast] = useState(null)
-  const [confirmState, setConfirmState] = useState(null)
+  const [dlg, setDlg] = useState(null)
   const timer = useRef(null)
   const resolver = useRef(null)
 
@@ -23,44 +23,35 @@ export function UiProvider({ children }) {
     (opts) =>
       new Promise((resolve) => {
         resolver.current = resolve
-        setConfirmState({ cancelLabel: 'Cancelar', confirmLabel: 'Confirmar', ...opts })
+        setDlg({ cancelLabel: 'Cancelar', confirmLabel: 'Confirmar', ...opts })
       }),
     []
   )
 
-  const close = (result) => {
+  const close = useCallback((result) => {
     resolver.current?.(result)
     resolver.current = null
-    setConfirmState(null)
-  }
-
-  const c = confirmState
-  const Icon = c?.destructive ? AlertTriangle : HelpCircle
+    setDlg(null)
+  }, [])
+  const cancel = useCallback(() => close(false), [close])
 
   return (
     <ToastContext.Provider value={show}>
       <ConfirmContext.Provider value={confirm}>
         {children}
-        <Dialog open={!!c} onClose={() => close(false)} labelledBy="confirm-title">
-          {c ? (
+        <Dialog open={!!dlg} onClose={cancel} labelledBy="cf-t">
+          {dlg ? (
             <>
-              <span className="dialog-icon" style={{ background: c.destructive ? 'var(--danger-soft)' : 'var(--navy-soft)', color: c.destructive ? 'var(--danger)' : 'var(--navy)' }}>
-                <Icon size={24} aria-hidden />
-              </span>
-              <h2 className="h2" id="confirm-title">
-                {c.title}
+              <h2 id="cf-t" style={{ fontSize: 18, fontWeight: 600 }}>
+                {dlg.title}
               </h2>
-              {c.message ? (
-                <p className="muted" style={{ fontSize: 15, marginTop: 6, color: 'var(--text-2)' }}>
-                  {c.message}
-                </p>
-              ) : null}
-              <div className="dialog-actions">
-                <Button variant="outline" onClick={() => close(false)}>
-                  {c.cancelLabel}
+              {dlg.message ? <p style={{ marginTop: 8, color: 'var(--ink-2)' }}>{dlg.message}</p> : null}
+              <div className="df">
+                <Button variant="s" onClick={cancel}>
+                  {dlg.cancelLabel}
                 </Button>
-                <Button className={c.destructive ? 'btn-solid-danger' : ''} onClick={() => close(true)}>
-                  {c.confirmLabel}
+                <Button variant={dlg.destructive ? 'd' : undefined} onClick={() => close(true)}>
+                  {dlg.confirmLabel}
                 </Button>
               </div>
             </>
@@ -68,7 +59,7 @@ export function UiProvider({ children }) {
         </Dialog>
         {toast ? (
           <div key={toast.id} className="toast" role="status" aria-live="polite">
-            {toast.kind === 'error' ? <AlertCircle size={18} color="#FFB4AE" /> : <CheckCircle2 size={18} color="#8FE0B8" />}
+            {toast.kind === 'error' ? <AlertCircle size={16} color="#FCA5A5" aria-hidden /> : <CheckCircle2 size={16} color="#86EFAC" aria-hidden />}
             {toast.message}
           </div>
         ) : null}

@@ -1,25 +1,34 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Download, Pencil, Search, Trash2 } from 'lucide-react'
 import ColetaDrawer from '../components/ColetaDrawer'
-import { Button, Chip, EmptyState, ErrorState, Field, Skeleton, Tag } from '../components/ui'
-import { WASTE_ICONS } from '../components/waste'
+import { Button, Dot, EmptyState, ErrorState, Field, IconButton, Seg, Skeleton, TypeBar } from '../components/ui'
 import { useColetas } from '../context/ColetasContext'
 import { useConfirm, useToast } from '../context/UiContext'
 import { WASTE_ORDER, WASTE_TYPES, wasteFromValue } from '../lib/theme'
-import { formatDate, formatLitros, formatTime, litros, parseDate } from '../lib/format'
+import { addDays, formatDate, formatLitros, formatTime, isSameDay, litros, parseDate, startOfDay, totalsByType } from '../lib/format'
 import { colaboradores } from '../lib/report'
 import { exportCsv } from '../lib/export'
 
-const PAGE = 15
+const STEP = 40
+const TYPES = [{ value: '', label: 'Todos' }, ...WASTE_ORDER.map((k) => ({ value: k, label: WASTE_TYPES[k].label }))]
+const WEEK = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
+
+const dayLabel = (d) => {
+  const now = new Date()
+  if (isSameDay(d, now)) return `Hoje, ${formatDate(d)}`
+  if (isSameDay(d, addDays(now, -1))) return `Ontem, ${formatDate(d)}`
+  const w = WEEK[d.getDay()]
+  return `${w.charAt(0).toUpperCase() + w.slice(1)}, ${formatDate(d)}`
+}
 
 export default function Coletas() {
   const { coletas, status, error, reload, remove } = useColetas()
   const toast = useToast()
   const confirm = useConfirm()
-  const [tipo, setTipo] = useState('todos')
+  const [tipo, setTipo] = useState('')
   const [pessoa, setPessoa] = useState('')
   const [q, setQ] = useState('')
-  const [page, setPage] = useState(0)
+  const [limit, setLimit] = useState(STEP)
   const [editing, setEditing] = useState(null)
   const close = useCallback(() => setEditing(null), [])
 
@@ -28,24 +37,36 @@ export default function Coletas() {
     const s = q.trim().toLowerCase()
     return coletas.filter((c) => {
       const t = wasteFromValue(c.TipoResiduo)
-      if (tipo !== 'todos' && t.key !== tipo) return false
+      if (tipo && t.key !== tipo) return false
       if (pessoa && c.NomeColaborador !== pessoa) return false
       if (!s) return true
       return [t.longLabel, c.Observacoes, c.NomeColaborador, formatDate(parseDate(c.DataRegistro))].some((v) => v && v.toLowerCase().includes(s))
     })
   }, [coletas, tipo, pessoa, q])
 
-  const pages = Math.max(1, Math.ceil(list.length / PAGE))
-  const current = Math.min(page, pages - 1)
-  const rows = list.slice(current * PAGE, current * PAGE + PAGE)
-  const resetPage = (fn) => (v) => {
+  const groups = useMemo(() => {
+    const out = []
+    const idx = {}
+    list.slice(0, limit).forEach((c) => {
+      const d = startOfDay(parseDate(c.DataRegistro))
+      const k = d.getTime()
+      if (!idx[k]) {
+        idx[k] = { key: k, date: d, items: [] }
+        out.push(idx[k])
+      }
+      idx[k].items.push(c)
+    })
+    return out.map((g) => ({ ...g, totals: totalsByType(g.items) }))
+  }, [list, limit])
+
+  const reset = (fn) => (v) => {
     fn(v)
-    setPage(0)
+    setLimit(STEP)
   }
 
   const del = async (c) => {
     const t = wasteFromValue(c.TipoResiduo)
-    const ok = await confirm({ title: 'Excluir coleta?', message: `${t.longLabel} de ${formatLitros(litros(c))}, registrada por ${c.NomeColaborador}. Essa ação não pode ser desfeita.`, confirmLabel: 'Excluir', destructive: true })
+    const ok = await confirm({ title: 'Excluir coleta?', message: `${t.longLabel}, ${formatLitros(litros(c))}, registrada por ${c.NomeColaborador}. Essa ação não pode ser desfeita.`, confirmLabel: 'Excluir', destructive: true })
     if (!ok) return
     try {
       await remove(c)
@@ -55,45 +76,40 @@ export default function Coletas() {
     }
   }
 
+  const clear = () => {
+    setTipo('')
+    setPessoa('')
+    setQ('')
+  }
+
   return (
     <>
-      <div className="page-head">
+      <header className="ph">
         <div>
-          <h1 className="h1">Coletas</h1>
-          <p className="muted">Todas as coletas registradas pelos colaboradores no app.</p>
+          <h1>Coletas</h1>
+          <p>Tudo o que os colaboradores registraram no app</p>
         </div>
-        <div className="page-actions">
-          <Button variant="outline" icon={Download} onClick={() => exportCsv(list)} disabled={!list.length}>
-            Exportar CSV
-          </Button>
-        </div>
-      </div>
+        <Button variant="s" icon={Download} onClick={() => exportCsv(list)} disabled={!list.length}>
+          Exportar CSV
+        </Button>
+      </header>
 
-      <section className="card">
+      <div className="card">
         <div className="toolbar">
-          <Field icon={Search} placeholder="Buscar por tipo, pessoa, data ou observação" value={q} onChange={(e) => resetPage(setQ)(e.target.value)} aria-label="Buscar coletas" style={{ flex: 1 }} className="grow" />
-          <Field select value={pessoa} onChange={(e) => resetPage(setPessoa)(e.target.value)} aria-label="Filtrar por colaborador">
+          <Field small icon={Search} placeholder="Buscar por tipo, pessoa, data ou observação" value={q} onChange={(e) => reset(setQ)(e.target.value)} aria-label="Buscar coletas" />
+          <Seg label="Tipo de resíduo" options={TYPES} value={tipo} onChange={reset(setTipo)} />
+          <select className="sel" value={pessoa} onChange={(e) => reset(setPessoa)(e.target.value)} aria-label="Colaborador">
             <option value="">Todos os colaboradores</option>
             {people.map((p) => (
               <option key={p}>{p}</option>
             ))}
-          </Field>
-        </div>
-        <div className="chips" style={{ marginBottom: 12 }}>
-          <Chip on={tipo === 'todos'} onClick={() => resetPage(setTipo)('todos')}>
-            Todos
-          </Chip>
-          {WASTE_ORDER.map((k) => (
-            <Chip key={k} on={tipo === k} onClick={() => resetPage(setTipo)(k)}>
-              {WASTE_TYPES[k].label}
-            </Chip>
-          ))}
+          </select>
         </div>
 
         {status === 'loading' ? (
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gap: 12, padding: 20 }}>
             {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} h={36} />
+              <Skeleton key={i} h={28} />
             ))}
           </div>
         ) : status === 'error' ? (
@@ -101,81 +117,97 @@ export default function Coletas() {
         ) : list.length === 0 ? (
           <EmptyState
             icon={Search}
-            title={coletas.length ? 'Nada encontrado' : 'Nenhuma coleta registrada'}
-            message={coletas.length ? 'Nenhuma coleta corresponde aos filtros.' : 'As coletas aparecem aqui quando forem registradas pelo app.'}
+            title={coletas.length ? 'Nenhuma coleta encontrada' : 'Nenhuma coleta registrada'}
+            message={coletas.length ? 'Nada corresponde à busca e aos filtros escolhidos.' : 'As coletas aparecem aqui assim que forem registradas pelo app.'}
             action={coletas.length ? 'Limpar filtros' : undefined}
-            onAction={() => {
-              setTipo('todos')
-              setPessoa('')
-              setQ('')
-            }}
+            onAction={clear}
           />
         ) : (
           <>
-            <div className="table-wrap">
-              <table className="table">
+            <div className="tw">
+              <table>
                 <thead>
                   <tr>
-                    <th>Data</th>
+                    <th style={{ width: 88 }}>Hora</th>
                     <th>Tipo</th>
                     <th>Colaborador</th>
                     <th>Saco × qtd</th>
-                    <th style={{ textAlign: 'right' }}>Total</th>
-                    <th>Observações</th>
-                    <th>
+                    <th className="r">Total</th>
+                    <th style={{ width: 88 }}>
                       <span className="sr-only">Ações</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((c) => {
-                    const t = wasteFromValue(c.TipoResiduo)
-                    const d = parseDate(c.DataRegistro)
-                    return (
-                      <tr key={c.Id}>
-                        <td style={{ whiteSpace: 'nowrap' }}>
-                          <b>{formatDate(d)}</b> <span className="muted">{formatTime(d)}</span>
-                        </td>
-                        <td>
-                          <Tag type={t} icon={WASTE_ICONS[t.key]} />
-                        </td>
-                        <td>{c.NomeColaborador}</td>
-                        <td className="muted">
-                          {c.TamanhoSaco} L × {c.Quantidade}
-                        </td>
-                        <td className="num">{formatLitros(litros(c))}</td>
-                        <td className="muted" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.Observacoes || ''}>
-                          {c.Observacoes || '—'}
-                        </td>
-                        <td>
-                          <div className="row-actions">
-                            <Button variant="ghost" size="sm" icon={Pencil} onClick={() => setEditing(c)} aria-label={`Editar coleta de ${formatDate(d)}`} />
-                            <Button variant="ghost" size="sm" icon={Trash2} onClick={() => del(c)} aria-label={`Excluir coleta de ${formatDate(d)}`} />
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {groups.map((g) => (
+                    <GroupRows key={g.key} group={g} onEdit={setEditing} onDelete={del} />
+                  ))}
                 </tbody>
               </table>
             </div>
-            <div className="pager">
-              <span className="small">
-                {current * PAGE + 1}–{Math.min(list.length, (current + 1) * PAGE)} de {list.length} coletas
+            <div className="tfoot">
+              <span className="num">
+                {Math.min(limit, list.length)} de {list.length} coletas
               </span>
-              <div className="page-actions">
-                <Button variant="outline" size="sm" onClick={() => setPage(current - 1)} disabled={current === 0}>
-                  Anterior
+              {limit < list.length ? (
+                <Button variant="s" onClick={() => setLimit((l) => l + STEP)}>
+                  Carregar mais
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => setPage(current + 1)} disabled={current >= pages - 1}>
-                  Próxima
-                </Button>
-              </div>
+              ) : null}
             </div>
           </>
         )}
-      </section>
-      <ColetaDrawer coleta={editing} onClose={close} />
+      </div>
+      <ColetaDrawer key={editing?.Id} coleta={editing} onClose={close} />
+    </>
+  )
+}
+
+function GroupRows({ group, onEdit, onDelete }) {
+  return (
+    <>
+      <tr className="grp">
+        <td colSpan={6}>
+          <div className="grp-in">
+            {dayLabel(group.date)}
+            <TypeBar totals={group.totals} />
+            <em className="num">{formatLitros(group.totals.total)}</em>
+          </div>
+        </td>
+      </tr>
+      {group.items.map((c) => {
+        const t = wasteFromValue(c.TipoResiduo)
+        const d = parseDate(c.DataRegistro)
+        return (
+          <tr key={c.Id}>
+            <td className="num muted">{formatTime(d)}</td>
+            <td>
+              <span className="tag">
+                <Dot type={t} />
+                {t.longLabel}
+              </span>
+              {c.Observacoes ? (
+                <div className="obs" title={c.Observacoes}>
+                  {c.Observacoes}
+                </div>
+              ) : null}
+            </td>
+            <td>{c.NomeColaborador}</td>
+            <td className="num muted">
+              {c.TamanhoSaco} L × {c.Quantidade}
+            </td>
+            <td className="num r" style={{ fontWeight: 600 }}>
+              {formatLitros(litros(c))}
+            </td>
+            <td>
+              <div className="row-acts">
+                <IconButton icon={Pencil} label={`Editar coleta das ${formatTime(d)}`} onClick={() => onEdit(c)} />
+                <IconButton icon={Trash2} label={`Excluir coleta das ${formatTime(d)}`} danger onClick={() => onDelete(c)} />
+              </div>
+            </td>
+          </tr>
+        )
+      })}
     </>
   )
 }

@@ -1,32 +1,29 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Minus, Plus, X } from 'lucide-react'
-import { Button, Field, Segmented } from './ui'
+import { Button, Field, IconButton, Seg, useEscape } from './ui'
 import { BAG_SIZES, WASTE_ORDER, WASTE_TYPES, wasteFromValue } from '../lib/theme'
 import { formatLitros, parseDate, toInputDateTime, toLocalIso } from '../lib/format'
 import { useColetas } from '../context/ColetasContext'
 import { useConfirm, useToast } from '../context/UiContext'
 
+const toForm = (c) => ({
+  tipo: wasteFromValue(c.TipoResiduo).key,
+  saco: c.TamanhoSaco,
+  quantidade: c.Quantidade,
+  data: toInputDateTime(parseDate(c.DataRegistro)),
+  observacoes: c.Observacoes || '',
+})
+
 export default function ColetaDrawer({ coleta, onClose }) {
   const { update, remove } = useColetas()
   const toast = useToast()
   const confirm = useConfirm()
-  const [form, setForm] = useState(null)
+  const [form, setForm] = useState(() => (coleta ? toForm(coleta) : null))
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
-
-  useEffect(() => {
-    if (!coleta) return
-    setForm({
-      tipo: wasteFromValue(coleta.TipoResiduo).key,
-      saco: coleta.TamanhoSaco,
-      quantidade: coleta.Quantidade,
-      data: toInputDateTime(parseDate(coleta.DataRegistro)),
-      observacoes: coleta.Observacoes || '',
-    })
-    const onKey = (e) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [coleta, onClose])
+  const [maxDate] = useState(() => toInputDateTime(new Date()))
+  const close = useCallback(() => !saving && !deleting && onClose(), [saving, deleting, onClose])
+  useEscape(!!coleta, close)
 
   if (!coleta || !form) return null
   const sizes = BAG_SIZES.includes(coleta.TamanhoSaco) ? BAG_SIZES : [...BAG_SIZES, coleta.TamanhoSaco].sort((a, b) => a - b)
@@ -53,9 +50,10 @@ export default function ColetaDrawer({ coleta, onClose }) {
   }
 
   const del = async () => {
+    const t = wasteFromValue(coleta.TipoResiduo)
     const ok = await confirm({
       title: 'Excluir coleta?',
-      message: `${wasteFromValue(coleta.TipoResiduo).longLabel} de ${formatLitros(coleta.TamanhoSaco * coleta.Quantidade)}, registrada por ${coleta.NomeColaborador}. Essa ação não pode ser desfeita.`,
+      message: `${t.longLabel}, ${formatLitros(coleta.TamanhoSaco * coleta.Quantidade)}, registrada por ${coleta.NomeColaborador}. Essa ação não pode ser desfeita.`,
       confirmLabel: 'Excluir',
       destructive: true,
     })
@@ -72,65 +70,56 @@ export default function ColetaDrawer({ coleta, onClose }) {
   }
 
   return (
-    <div className="overlay drawer-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <form className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onSubmit={save}>
-        <div className="dialog-head">
-          <h2 className="h2" id="drawer-title">
-            Editar coleta
-          </h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Fechar">
-            <X size={22} color="var(--ink)" />
-          </button>
-        </div>
-        <p className="muted">Registrada por {coleta.NomeColaborador}</p>
-
-        <div className="form-stack">
-          <div className="field">
-            <span className="field-label">Tipo de resíduo</span>
-            <Segmented label="Tipo de resíduo" options={WASTE_ORDER.map((k) => ({ value: k, label: WASTE_TYPES[k].label }))} value={form.tipo} onChange={(tipo) => set({ tipo })} />
+    <div className="overlay drawer-wrap" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+      <form className="drawer" role="dialog" aria-modal="true" aria-labelledby="dw-t" onSubmit={save}>
+        <div className="drawer-b">
+          <div className="dh">
+            <h2 id="dw-t">Editar coleta</h2>
+            <IconButton icon={X} label="Fechar" onClick={close} />
           </div>
+          <p className="dlead">Registrada por {coleta.NomeColaborador}</p>
 
-          <div className="field">
-            <span className="field-label" id="saco-label">
-              Tamanho do saco
-            </span>
-            <div className="grid-sizes" role="radiogroup" aria-labelledby="saco-label">
-              {sizes.map((s) => (
-                <button key={s} type="button" className="size" role="radio" aria-checked={form.saco === s} onClick={() => set({ saco: s })}>
-                  {s} L
-                </button>
-              ))}
+          <div className="stack">
+            <div className="fld">
+              <span className="fld-l">Tipo de resíduo</span>
+              <Seg full label="Tipo de resíduo" options={WASTE_ORDER.map((k) => ({ value: k, label: WASTE_TYPES[k].label }))} value={form.tipo} onChange={(tipo) => set({ tipo })} />
+            </div>
+            <div className="fld">
+              <span className="fld-l" id="dw-saco">
+                Tamanho do saco
+              </span>
+              <div className="sizes" role="radiogroup" aria-labelledby="dw-saco">
+                {sizes.map((s) => (
+                  <button key={s} type="button" className="size" role="radio" aria-checked={form.saco === s} onClick={() => set({ saco: s })}>
+                    {s} L
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="fld">
+              <span className="fld-l">Quantidade de sacos</span>
+              <div className="stepper">
+                <IconButton icon={Minus} label="Diminuir" disabled={form.quantidade <= 1} onClick={() => set({ quantidade: Math.max(1, form.quantidade - 1) })} />
+                <b className="num" aria-live="polite">
+                  {form.quantidade}
+                </b>
+                <IconButton icon={Plus} label="Aumentar" onClick={() => set({ quantidade: Math.min(99, form.quantidade + 1) })} />
+              </div>
+            </div>
+            <Field label="Data e hora" type="datetime-local" value={form.data} max={maxDate} onChange={(e) => set({ data: e.target.value })} required />
+            <Field label="Observações" optional="opcional" multiline value={form.observacoes} maxLength={500} placeholder="Ex.: coletado no bloco B" onChange={(e) => set({ observacoes: e.target.value })} />
+            <div className="total">
+              <span>Total</span>
+              <b className="num">{formatLitros(form.saco * form.quantidade)}</b>
             </div>
           </div>
-
-          <div className="field">
-            <span className="field-label">Quantidade de sacos</span>
-            <div className="stepper">
-              <button type="button" onClick={() => set({ quantidade: Math.max(1, form.quantidade - 1) })} disabled={form.quantidade <= 1} aria-label="Diminuir">
-                <Minus size={18} />
-              </button>
-              <b aria-live="polite">{form.quantidade}</b>
-              <button type="button" onClick={() => set({ quantidade: Math.min(99, form.quantidade + 1) })} aria-label="Aumentar">
-                <Plus size={18} />
-              </button>
-            </div>
-          </div>
-
-          <Field label="Data e hora" type="datetime-local" value={form.data} max={toInputDateTime(new Date())} onChange={(e) => set({ data: e.target.value })} required />
-          <Field label="Observações" optional="opcional" multiline value={form.observacoes} maxLength={500} placeholder="Ex.: coletado no bloco B" onChange={(e) => set({ observacoes: e.target.value })} />
-
-          <div className="info" style={{ justifyContent: 'space-between' }}>
-            <span>Total</span>
-            <b style={{ fontSize: 16 }}>{formatLitros(form.saco * form.quantidade)}</b>
-          </div>
         </div>
-
-        <div className="dialog-actions stack">
-          <Button type="submit" size="lg" loading={saving}>
-            Salvar alterações
+        <div className="drawer-f">
+          <Button variant="ds" onClick={del} loading={deleting} disabled={saving}>
+            Excluir
           </Button>
-          <Button variant="danger" onClick={del} loading={deleting}>
-            Excluir coleta
+          <Button type="submit" loading={saving} disabled={deleting}>
+            Salvar alterações
           </Button>
         </div>
       </form>
