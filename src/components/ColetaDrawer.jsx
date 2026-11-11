@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Minus, Plus, X } from 'lucide-react'
 import { Button, Field, IconButton, Seg, useEscape } from './ui'
 import { BAG_SIZES, WASTE_ORDER, WASTE_TYPES, wasteFromValue } from '../lib/theme'
@@ -69,7 +70,7 @@ export default function ColetaDrawer({ coleta, onClose }) {
     }
   }
 
-  return (
+  return createPortal(
     <div className="overlay drawer-wrap" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <form className="drawer" role="dialog" aria-modal="true" aria-labelledby="dw-t" onSubmit={save}>
         <div className="drawer-b">
@@ -123,6 +124,7 @@ export default function ColetaDrawer({ coleta, onClose }) {
           </Button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   )
 }

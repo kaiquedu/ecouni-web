@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Eye, EyeOff, Inbox, Recycle, WifiOff, X } from 'lucide-react'
 import { WASTE_ORDER, WASTE_TYPES } from '../lib/theme'
 import { initials } from '../lib/format'
@@ -149,7 +150,7 @@ export function Dialog({ open, onClose, title, lead, children, labelledBy }) {
     return () => clearTimeout(t)
   }, [open])
   if (!open) return null
-  return (
+  return createPortal(
     <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} className="dialog" role="dialog" aria-modal="true" aria-labelledby={labelledBy || id}>
         {title ? (
@@ -163,7 +164,8 @@ export function Dialog({ open, onClose, title, lead, children, labelledBy }) {
         ) : null}
         {children}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
