@@ -19,7 +19,9 @@ export default function PanelLayout() {
   const confirm = useConfirm()
   const { pathname } = useLocation()
 
-  useEffect(() => window.scrollTo(0, 0), [pathname])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
 
   const sair = async () => {
     if (await confirm({ title: 'Sair do painel?', message: 'Você vai precisar entrar de novo com e-mail e senha.', confirmLabel: 'Sair' })) logout()
