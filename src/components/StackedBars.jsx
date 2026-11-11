@@ -40,7 +40,11 @@ export default function StackedBars({ data, animKey }) {
                   .map((k) => (d[k] > 0 ? <i key={k} style={{ flex: d[k], background: WASTE_TYPES[k].color }} /> : null))}
               </div>
               {hover === i && d.total > 0 ? (
-                <div className="tip" role="tooltip">
+                <div
+                  className={`tip${i < 2 ? ' tip-l' : i > data.length - 3 ? ' tip-r' : ''}`}
+                  role="tooltip"
+                  style={{ bottom: `calc(${(d.total / max) * 100}% + 10px)` }}
+                >
                   <b>{d.label}</b>
                   {WASTE_ORDER.map((k) => (
                     <span key={k}>
