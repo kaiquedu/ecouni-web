@@ -23,6 +23,10 @@ O acesso é só do administrador. Colaboradores que tentam entrar recebem um avi
   <img src="docs/screenshots/editar-coleta.png" width="49%" alt="Edição de coleta" />
   <img src="docs/screenshots/usuarios.png" width="49%" alt="Usuários" />
 </p>
+<p>
+  <img src="docs/screenshots/login.png" width="74%" alt="Login" />
+  <img src="docs/screenshots/visao-geral-mobile.png" width="24%" alt="Visão geral no celular" />
+</p>
 
 ## Stack
 

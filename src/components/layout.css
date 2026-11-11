@@ -372,19 +372,6 @@
   display: flex;
   justify-content: flex-end;
   gap: 2px;
-  opacity: 0;
-  transition: opacity 150ms var(--ease);
-}
-
-tr:hover .row-acts,
-tr:focus-within .row-acts {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .row-acts {
-    opacity: 1;
-  }
 }
 
 .tfoot {
