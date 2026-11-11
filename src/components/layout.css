@@ -409,7 +409,7 @@ tr:focus-within .row-acts {
   font-weight: 600;
 }
 
-.who span {
+.who > div span {
   display: block;
   font-size: 12px;
   color: var(--ink-3);
